@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+
+
+import sys
+import argparse
+import time
+import struct
+import serial
+import os
+import logging
+import json
+
+EXTCAP_VERSION = "1.1"
+DESCRIPTION = "Sonoff ZBDongle-E Sniffer"
+DEFAULT_SERIAL_PORT = "/dev/tty.usbserial-22430"
+DEFAULT_SERIAL_CHANNEL = 25
+DEFAULT_SERIAL_BAUD_RATE = 1000000
+
+
+logger = logging.getLogger(__name__)
+seq_num = 0
+
+
+class ArgumentParser(argparse.ArgumentParser):
+    def _get_action_from_name(self, name):
+        """Given a name, get the Action instance registered with this parser.
+        If only it were made available in the ArgumentError object. It is
+        passed as its first arg...
+        """
+        container = self._actions
+        if name is None:
+            return None
+        for action in container:
+            if '/'.join(action.option_strings) == name:
+                return action
+            elif action.metavar == name:
+                return action
+            elif action.dest == name:
+                return action
+
+    def error(self, message):
+        exc = sys.exc_info()[1]
+        if exc:
+            exc.argument = self._get_action_from_name(exc.argument_name)
+            raise exc
+        super(ArgumentParser, self).error(message)
+
+
+# -----------------------
+# Extcap metadata commands
+# -----------------------
+
+def extcap_interfaces():
+    print("extcap {version=1.0}{help=https://www.wireshark.org}{display=Zigbee interface}")
+    print("interface {value=sonoff_zigbee_sniffer}{display=Sonoff sniffer interface for extcap}")
+    # print("control {number=%d}{type=string}{display=Message}{tooltip=Package message content. Must start with a capital letter.}{placeholder=Enter package message content here ...}{validation=^[A-Z]+}" % CTRL_ARG_MESSAGE)
+  
+def extcap_version():
+    print("extcap %s" % EXTCAP_VERSION)
+
+
+def extcap_dlts():
+    print("dlt {number=147}{name=User147}{display=Zigbee ZEP}")
+
+
+def extcap_config():
+    print("arg {number=0}{call=--serial-port}{display=Serial Port}{tooltip=Serial device path}{type=string}{required=true}")
+    print("arg {number=1}{call=--channel}{display=Channel}{tooltip=Zigbee channel number}{type=integer}{range=11,27}{default=24}")
+    print("arg {number=2}{call=--baud}{display=Baud Rate}{type=integer}{default=1000000}")
+
+def write_pcap_global_header(f):
+    magic = 0xa1b2c3d4
+    ver_major = 2
+    ver_minor = 4
+    thiszone = 0
+    sigfigs = 0
+    snaplen = 65535
+    network = 147
+    f.write(struct.pack("IHHIIII", magic, ver_major, ver_minor, thiszone, sigfigs, snaplen, network))
+
+def write_pcap_packet(f, pkt_bytes, ts=None):
+    # pcap per-packet header: ts_sec, ts_usec, incl_len, orig_len (all little-endian)
+    if ts is None:
+        t = time.time()
+    else:
+        t = ts
+    ts_sec = int(t)
+    ts_usec = int((t - ts_sec) * 1e6)
+    incl_len = len(pkt_bytes)
+    orig_len = incl_len
+    f.write(struct.pack("<IIII", ts_sec, ts_usec, incl_len, orig_len))
+    f.write(pkt_bytes)
+
+# -----------------------
+# Packet → ZEP converter
+# -----------------------
+
+def make_zep_hdr(payload, channel, lqi, rssi):
+
+    logger.info(f"make_zep {payload} {channel}")
+    logger.info(f"len(payload) & 0xFFFF {len(payload) & 0xFFFF}")
+
+    # zep v2 header, type 1 
+    # Preamble        - 2 bytes
+    # Version         - 1 byte
+    # Type            - 1 byte
+    # Channel ID      - 1 byte
+    # Device ID       - 2 bytes
+    # CRC/LQI Mode    - 1 bytes
+    # LQI Val         - 1 byte
+    # NTP Timestamp   - 8 bytes
+    # Sequence        - 4 bytes 
+    # Reserved        - 10 bytes 
+    # Length          - 1 byte
+
+    deviceId = 1
+    lqiMode = False
+
+    ts_usec = int(time.time() * 1e6) & 0xFFFFFFFF
+
+    # checksum will be attached to the end of the payload 
+    # In Wireshark, set Preferences/Protocols/IEEE 802.15.4 FCS format to 'TI CC24xx metadata'
+    checksum = struct.pack(">bB", rssi, 0x80 | ((lqi>>1) & 0x7F))
+
+    #  * First byte: RSSI value as a signed 8 bits integer (range -128 to 127)
+    #  * Second byte:
+    #      - the most significant bit is set to 1 of the CRC of the frame is correct
+    #      - the 7 least significant bits contain the LQI value as a unsigned 7 bits integer (range 0 to 127)
+
+    zep_hdr = struct.pack(">2sBBBHBBQIxxxxxxxxxxB",
+                          b"EX",             
+                          2,                
+                          1,   
+                          channel & 0xFF,            
+                          deviceId,
+                          lqiMode,  
+                          lqi,               
+                          ts_usec,
+                          seq_num,
+                          (len(payload) + len(checksum)) & 0xFFFF,
+                          )
+    
+    return zep_hdr + payload + checksum
+
+
+# -----------------------
+# Capture loop
+# -----------------------
+
+def run_capture(serial_port, fifo, channel, baud):
+
+    logger.info(f"run_capture serial:{serial_port} fifo:{fifo} channel:{channel} baud:{baud}\n")
+    
+    try:
+        ser = serial.Serial(serial_port, baudrate=baud, timeout=0.5)
+    except Exception as e:
+        sys.stderr.write(f"ERROR: Cannot open serial port: {e}\n")
+        sys.exit(1)
+
+    try:
+        with open(fifo, "wb", buffering=0) as fp:
+            print("")
+            write_pcap_global_header(fp)
+
+            while True:
+
+                # read in a JSON frame 
+                data = ser.read_until(b'}', size=1000).decode('utf-8', errors='strict')
+                try:
+                    json_obj = json.loads(data)
+                    len = json_obj.get('L', 0)          # length
+                    lqi = json_obj.get('Q', 0)          # LQI
+                    rssi = json_obj.get('R', 0)         # RSSI
+                    chan = json_obj.get('C', 0)         # channel
+                    hexpayload = json_obj.get('S', 0)   # payload
+
+                    payload = bytearray.fromhex(hexpayload)
+                    zep_hdr = make_zep_hdr(payload, int(chan), int(lqi), int(rssi))
+                    write_pcap_packet(fp, zep_hdr)
+
+                    global seq_num
+                    seq_num += 1
+
+                except json.JSONDecodeError as e:
+                    print(f'JSONDecodeError:{e}')
+
+              
+              
+
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        sys.stderr.write(f"Capture error: {e}\n")
+
+
+# -----------------------
+# Entry point
+# -----------------------
+
+if __name__ == '__main__':
+    interface = ""
+    option = ""
+
+    # Capture options
+    delay = 0
+    message = ""
+    fake_ip = ""
+    ts = 0
+
+    parser = ArgumentParser(
+            prog="Zigbee extcap",
+            description="Extcap for Sonoff zbdongle e-sniffer"
+            )
+
+    logging.basicConfig(filename="/Users/bendyer/Downloads/logfile.txt", filemode="a",level=logging.INFO)
+
+    # Extcap Arguments
+    parser.add_argument("--capture", help="Start the capture routine", action="store_true" )
+    parser.add_argument("--extcap-interfaces", help="Provide a list of interfaces to capture from", action="store_true")
+    parser.add_argument("--extcap-interface", help="Provide the interface to capture from")
+    parser.add_argument("--extcap-dlts", help="Provide a list of dlts for the given interface", action="store_true")
+    parser.add_argument("--extcap-config", help="Provide a list of configurations for the given interface", action="store_true")
+    parser.add_argument("--extcap-capture-filter", help="Used together with capture to provide a capture filter")
+    parser.add_argument("--fifo", help="Use together with capture to provide the fifo to dump data to")
+    parser.add_argument("--extcap-version", help="Shows the version of this utility", nargs='?', default="")
+
+    parser.add_argument("--serial-port", help="The USB serial port name", nargs='?', default=DEFAULT_SERIAL_PORT)
+    parser.add_argument("--channel", help="The Zigbee channel number", type=int, default=DEFAULT_SERIAL_CHANNEL, choices=[11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27])
+    parser.add_argument("--baud", help="Baud rate of serial port", type=int, default=DEFAULT_SERIAL_BAUD_RATE, choices=[DEFAULT_SERIAL_BAUD_RATE])
+ 
+    try:
+        args, unknown = parser.parse_known_args()
+        logging.info(str(sys.argv))
+        logging.info(sys.version)
+
+    except argparse.ArgumentError as exc: 
+        sys.exit(1)
+
+    # extcap calling sequence https://www.wireshark.org/docs/wsdg_html_chunked/ChCaptureExtcap.html
+
+    if len(sys.argv) <= 1:
+        parser.exit("No arguments given!")
+
+    if args.extcap_interfaces and args.extcap_version:
+        extcap_interfaces() 
+    elif args.extcap_interface and args.extcap_dlts:
+        extcap_dlts()
+    elif args.extcap_interface and args.extcap_config:
+        extcap_config()
+    elif args.extcap_interface and args.capture:
+        if not args.serial_port:
+            sys.stderr.write("ERROR: missing --serial-port\n")
+            sys.exit(1)
+        run_capture(args.serial_port, args.fifo, args.channel, args.baud)
+
+    elif args.capture:
+        if args.fifo is None:
+            sys.exit(1)
+
+        try:
+            print("")
+        except KeyboardInterrupt:
+            pass
+    
