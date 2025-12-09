@@ -13,8 +13,13 @@ import json
 EXTCAP_VERSION = "1.1"
 DESCRIPTION = "Sonoff ZBDongle-E Sniffer"
 DEFAULT_SERIAL_PORT = "/dev/tty.usbserial-22430"
-DEFAULT_SERIAL_CHANNEL = 25
+DEFAULT_SERIAL_CHANNEL = 24
 DEFAULT_SERIAL_BAUD_RATE = 1000000
+
+
+# References 
+#  https://www.wireshark.org/docs/wsar_html/packet-ieee802154_8h_source.html 802.15.4 dissector
+#  https://github.com/MountainLogic/GnuRadio-Wireshark-Example/tree/master
 
 
 logger = logging.getLogger(__name__)
@@ -53,7 +58,6 @@ class ArgumentParser(argparse.ArgumentParser):
 def extcap_interfaces():
     print("extcap {version=1.0}{help=https://www.wireshark.org}{display=Zigbee interface}")
     print("interface {value=sonoff_zigbee_sniffer}{display=Sonoff sniffer interface for extcap}")
-    # print("control {number=%d}{type=string}{display=Message}{tooltip=Package message content. Must start with a capital letter.}{placeholder=Enter package message content here ...}{validation=^[A-Z]+}" % CTRL_ARG_MESSAGE)
   
 def extcap_version():
     print("extcap %s" % EXTCAP_VERSION)
@@ -61,7 +65,7 @@ def extcap_version():
 
 def extcap_dlts():
     print("dlt {number=147}{name=User147}{display=Zigbee ZEP}")
-
+ 
 
 def extcap_config():
     print("arg {number=0}{call=--serial-port}{display=Serial Port}{tooltip=Serial device path}{type=string}{required=true}")
@@ -91,14 +95,12 @@ def write_pcap_packet(f, pkt_bytes, ts=None):
     f.write(struct.pack("<IIII", ts_sec, ts_usec, incl_len, orig_len))
     f.write(pkt_bytes)
 
+
 # -----------------------
 # Packet → ZEP converter
 # -----------------------
 
 def make_zep_hdr(payload, channel, lqi, rssi):
-
-    logger.info(f"make_zep {payload} {channel}")
-    logger.info(f"len(payload) & 0xFFFF {len(payload) & 0xFFFF}")
 
     # zep v2 header, type 1 
     # Preamble        - 2 bytes
@@ -153,6 +155,11 @@ def run_capture(serial_port, fifo, channel, baud):
     
     try:
         ser = serial.Serial(serial_port, baudrate=baud, timeout=0.5)
+
+        # set Zigbee channel to listen to
+        ser.write(bytes('{"C":', 'utf-8') + bytes(str(channel), 'utf-8') + bytes('}\r\n', 'utf-8'))
+        time.sleep(0.1)
+     
     except Exception as e:
         sys.stderr.write(f"ERROR: Cannot open serial port: {e}\n")
         sys.exit(1)
@@ -165,7 +172,9 @@ def run_capture(serial_port, fifo, channel, baud):
             while True:
 
                 # read in a JSON frame 
-                data = ser.read_until(b'}', size=1000).decode('utf-8', errors='strict')
+                # data = ser.read_until(b'}', size=1000).decode('utf-8', errors='strict')
+                data = ser.readline().decode('utf-8', errors='strict').strip()
+
                 try:
                     json_obj = json.loads(data)
                     len = json_obj.get('L', 0)          # length
@@ -177,15 +186,12 @@ def run_capture(serial_port, fifo, channel, baud):
                     payload = bytearray.fromhex(hexpayload)
                     zep_hdr = make_zep_hdr(payload, int(chan), int(lqi), int(rssi))
                     write_pcap_packet(fp, zep_hdr)
-
+                     
                     global seq_num
                     seq_num += 1
 
                 except json.JSONDecodeError as e:
                     print(f'JSONDecodeError:{e}')
-
-              
-              
 
     except KeyboardInterrupt:
         pass
@@ -233,8 +239,11 @@ if __name__ == '__main__':
         logging.info(str(sys.argv))
         logging.info(sys.version)
 
-    except argparse.ArgumentError as exc: 
+    except argparse.ArgumentError as exc:
+       
         sys.exit(1)
+
+
 
     # extcap calling sequence https://www.wireshark.org/docs/wsdg_html_chunked/ChCaptureExtcap.html
 
