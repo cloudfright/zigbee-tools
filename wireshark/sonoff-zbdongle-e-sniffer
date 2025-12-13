@@ -118,7 +118,12 @@ def make_zep_hdr(payload, channel, lqi, rssi):
     deviceId = 1
     lqiMode = False
 
-    ts_usec = int(time.time() * 1e6) & 0xFFFFFFFF
+    # NTP timestamp: seconds since 1900-01-01 + fractional seconds
+    NTP_EPOCH_OFFSET = 2208988800  # seconds between 1900 and 1970
+    current_time = time.time()
+    ntp_seconds = int(current_time) + NTP_EPOCH_OFFSET
+    ntp_fraction = int((current_time % 1.0) * (2**32))
+    ntp_timestamp = (ntp_seconds << 32) | ntp_fraction
 
     # checksum will be attached to the end of the payload 
     # In Wireshark, set Preferences/Protocols/IEEE 802.15.4 FCS format to 'TI CC24xx metadata'
@@ -137,7 +142,7 @@ def make_zep_hdr(payload, channel, lqi, rssi):
                           deviceId,
                           lqiMode,  
                           lqi,               
-                          ts_usec,
+                          ntp_timestamp,
                           seq_num,
                           (len(payload) + len(checksum)) & 0xFFFF,
                           )
