@@ -191,7 +191,7 @@ def run_capture(serial_port, fifo, channel, baud):
                     seq_num += 1
 
                 except json.JSONDecodeError as e:
-                    print(f'JSONDecodeError:{e}')
+                    sys.stderr.write(f"JSONDecodeError:{e}\n")
 
     except KeyboardInterrupt:
         pass
