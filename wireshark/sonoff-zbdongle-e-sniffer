@@ -166,6 +166,7 @@ def run_capture(serial_port, fifo, channel, baud):
         sys.exit(1)
 
     try:
+        global seq_num
         with open(fifo, "wb", buffering=0) as fp:
             print("")
             write_pcap_global_header(fp)
@@ -173,22 +174,20 @@ def run_capture(serial_port, fifo, channel, baud):
             while True:
 
                 # read in a JSON frame 
-                # data = ser.read_until(b'}', size=1000).decode('utf-8', errors='strict')
                 data = ser.readline().decode('utf-8', errors='strict').strip()
 
                 try:
                     json_obj = json.loads(data)
-                    length = json_obj.get('L', 0)       # length
-                    lqi = json_obj.get('Q', 0)          # LQI
-                    rssi = json_obj.get('R', 0)         # RSSI
-                    chan = json_obj.get('C', 0)         # channel
-                    hexpayload = json_obj.get('S', 0)   # payload
+                    length      = json_obj.get('L', 0)       # length
+                    lqi         = json_obj.get('Q', 0)          # LQI
+                    rssi        = json_obj.get('R', 0)         # RSSI
+                    chan        = json_obj.get('C', 0)         # channel
+                    hexpayload  = json_obj.get('S', 0)   # payload
 
                     payload = bytearray.fromhex(hexpayload)
                     zep_hdr = make_zep_hdr(payload, int(chan), int(lqi), int(rssi))
                     write_pcap_packet(fp, zep_hdr)
                      
-                    global seq_num
                     seq_num += 1
 
                 except json.JSONDecodeError as e:
@@ -209,10 +208,6 @@ if __name__ == '__main__':
     option = ""
 
     # Capture options
-    delay = 0
-    message = ""
-    fake_ip = ""
-    ts = 0
 
     parser = ArgumentParser(
             prog="Zigbee extcap",
@@ -239,8 +234,6 @@ if __name__ == '__main__':
     except argparse.ArgumentError as exc:
        
         sys.exit(1)
-
-
 
     # extcap calling sequence https://www.wireshark.org/docs/wsdg_html_chunked/ChCaptureExtcap.html
 
