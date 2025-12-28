@@ -21,7 +21,7 @@ To flash the dongle with the sniffer firmware, I used the [universal-silabs-flas
    pip install universal-silabs-flasher
    ```
 2. Download the sniffer firmware file `Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E.gbl` from [ErkSponge
-Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E respistory](https://github.com/ErkSponge/Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E/blob/main/Output/Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E/Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E.gbl). This repository is an excellent source of information and inspiration - thank you Eric St-Onge!
+Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E repository](https://github.com/ErkSponge/Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E/blob/main/Output/Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E/Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E.gbl). This repository is an excellent source of information and inspiration - thank you Eric St-Onge!
 3. Plug the dongle to your computer's USB port and establish how it presents itself (e.g. `/dev/cu.usbserial-XXXX` on MacOS or `COMX` on Windows). I'm on MacOS, so I used the command `ls /dev/cu.*` before and after plugging in the dongle to identify the correct device path. 
 4. Take off the dongle casing to access the boot button. Press and hold the boot button while plugging in the dongle to enter bootloader mode.
 
