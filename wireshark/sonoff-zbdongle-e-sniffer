@@ -178,7 +178,7 @@ def run_capture(serial_port, fifo, channel, baud):
 
                 try:
                     json_obj = json.loads(data)
-                    len = json_obj.get('L', 0)          # length
+                    length = json_obj.get('L', 0)       # length
                     lqi = json_obj.get('Q', 0)          # LQI
                     rssi = json_obj.get('R', 0)         # RSSI
                     chan = json_obj.get('C', 0)         # channel
