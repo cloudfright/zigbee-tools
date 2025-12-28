@@ -177,11 +177,11 @@ def run_capture(serial_port, fifo, channel, baud):
 
                 try:
                     json_obj = json.loads(data)
-                    length      = json_obj.get('L', 0)       # length
-                    lqi         = json_obj.get('Q', 0)          # LQI
-                    rssi        = json_obj.get('R', 0)         # RSSI
-                    chan        = json_obj.get('C', 0)         # channel
-                    hexpayload  = json_obj.get('S', 0)   # payload
+                    # length    = json_obj.get('L', 0)  # length - not used
+                    lqi         = json_obj.get('Q', 0)  # LQI
+                    rssi        = json_obj.get('R', 0)  # RSSI
+                    chan        = json_obj.get('C', 0)  # channel
+                    hexpayload  = json_obj.get('S', 0)  # payload
 
                     payload = bytearray.fromhex(hexpayload)
                     zep_hdr = make_zep_hdr(payload, int(chan), int(lqi), int(rssi))
@@ -190,7 +190,10 @@ def run_capture(serial_port, fifo, channel, baud):
                     seq_num += 1
 
                 except json.JSONDecodeError as e:
-                    sys.stderr.write(f"JSONDecodeError:{e}\n")
+                    # if we get as JSON error, don't write to stderr to avoid Wireshark showing an error message when capture stops
+                    # TODO - find nicer way to handle this
+                    pass
+
 
     except KeyboardInterrupt:
         pass
