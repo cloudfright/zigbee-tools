@@ -16,7 +16,7 @@ DEFAULT_SERIAL_CHANNEL = 24
 DEFAULT_SERIAL_BAUD_RATE = 1000000
 
 
-# References 
+# References
 #  https://www.wireshark.org/docs/wsar_html/packet-ieee802154_8h_source.html 802.15.4 dissector
 #  https://github.com/MountainLogic/GnuRadio-Wireshark-Example/tree/master
 
