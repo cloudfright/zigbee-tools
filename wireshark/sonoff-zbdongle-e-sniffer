@@ -129,7 +129,7 @@ def make_zep_hdr(payload, channel, lqi, rssi):
 
     #  * First byte: RSSI value as a signed 8 bits integer (range -128 to 127)
     #  * Second byte:
-    #      - the most significant bit is set to 1 of the CRC of the frame is correct
+    #      - the most significant bit is set to 1 if the CRC of the frame is correct
     #      - the 7 least significant bits contain the LQI value as a unsigned 7 bits integer (range 0 to 127)
 
     zep_hdr = struct.pack(">2sBBBHBBQIxxxxxxxxxxB",
