@@ -231,7 +231,8 @@ if __name__ == '__main__':
         args, unknown = parser.parse_known_args()
 
     except argparse.ArgumentError as exc:
-       
+        sys.stderr.write(f"Argument parsing error: {exc}\n")
+        parser.print_usage(sys.stderr)
         sys.exit(1)
 
     # extcap calling sequence https://www.wireshark.org/docs/wsdg_html_chunked/ChCaptureExtcap.html
