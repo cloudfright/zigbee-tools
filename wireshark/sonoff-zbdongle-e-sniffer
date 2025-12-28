@@ -168,7 +168,6 @@ def run_capture(serial_port, fifo, channel, baud):
     try:
         global seq_num
         with open(fifo, "wb", buffering=0) as fp:
-            print("")
             write_pcap_global_header(fp)
 
             while True:
