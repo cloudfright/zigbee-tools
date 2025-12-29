@@ -5,16 +5,14 @@ This repository contains various tools and experiments related to capturing and 
 
 ### Sniffing Zigbee traffic with Wireshark
 
-The hardware I used to sniff Zigbee traffic is the [SONOFF Zigbee 3.0 USB Dongle Plus | ZBDongle-E](https://sonoff.tech/en-uk/products/sonoff-zigbee-3-0-usb-dongle-plus-zbdongle-e). 
+The hardware needed to sniff Zigbee traffic is the [SONOFF Zigbee 3.0 USB Dongle Plus | ZBDongle-E](https://sonoff.tech/en-uk/products/sonoff-zigbee-3-0-usb-dongle-plus-zbdongle-e). 
 
 ![Image of Sonoff Zigbee 3.0 USB Dongle Plus](docs/images/dongle.jpg)
 
-
-The dongle comes with pre-installed firmware for Zigbee coordinator functionality, and needs to be reflashed with  sniffer firmware to capture Zigbee traffic. 
-
+The dongle is shipped with pre-installed Zigbee coordinator firmware and needs to be reflashed with sniffer firmware to capture Zigbee traffic. 
 
 ### Flashing the dongle 
-To flash the dongle with the sniffer firmware, I used the [universal-silabs-flasher](https://pypi.org/project/universal-silabs-flasher/) Python package. There is a [browser-based flasher](https://dongle.sonoff.tech/sonoff-dongle-flasher/) provided by Sonoff, but I wasn't able to get it to work with a custom firmware file.
+To flash the dongle with the sniffer firmware, I used the [universal-silabs-flasher](https://pypi.org/project/universal-silabs-flasher/) Python package. There's a [browser-based flasher](https://dongle.sonoff.tech/sonoff-dongle-flasher/) provided by Sonoff, but I wasn't able to get it to work with a custom firmware file. There's also the [Silicon Labs Simplicity Commander](https://www.silabs.com/software-and-tools/simplicity-studio/simplicity-commander?tab=documentation) tool.
 
 1. From the command line, install the package:
    ```
@@ -22,15 +20,15 @@ To flash the dongle with the sniffer firmware, I used the [universal-silabs-flas
    ```
 2. Download the sniffer firmware file `Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E.gbl` from [ErkSponge
 Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E repository](https://github.com/ErkSponge/Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E/blob/main/Output/Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E/Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E.gbl). This repository is an excellent source of information and inspiration - thank you Eric St-Onge!
-3. Plug the dongle to your computer's USB port and establish how it presents itself (e.g. `/dev/cu.usbserial-XXXX` on MacOS or `COMX` on Windows). I'm on MacOS, so I used the command `ls /dev/cu.*` before and after plugging in the dongle to identify the correct device path. 
-4. Take off the dongle casing to access the boot button. Press and hold the boot button while plugging in the dongle to enter bootloader mode.
+3. Plug the dongle into to your computer's USB port and establish how it presents itself (e.g. `/dev/cu.usbserial-XXXX` on MacOS or `COMX` on Windows). I'm on MacOS, so I used the command `ls /dev/cu.*` before and after plugging in the dongle to identify the correct device path. 
+4. Take off the dongle casing to access the boot button on the PCB. To enter boot mode, press and hold the boot button while plugging in the dongle. Keep holding the button for a few seconds after plugging it in, then release it.
 
 ![Dongle casing removed](docs/images/dongle-pcb.jpg)
 
 ![Dongle in boot button mode](docs/images/dongle-boot.jpg)
 5. Flash the firmware using the following command (replace the device path with your own):
    ```
-   universal-silabs-flasher --device /dev/cu.usbserial-22420 flash --firmware ~/Desktop/Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E.gbl --allow-cross-flashing  
+   universal-silabs-flasher --device /dev/cu.usbserial-22420 flash --firmware /path/to/Sniffer_802.15.4_SONOFF_USB_Dongle_Plus_E.gbl --allow-cross-flashing  
    ```
 6. After flashing, unplug and replug the dongle. It should now be ready to capture Zigbee traffic. You should see the LED on the dongle PCB blinking as it captures packets.
 
@@ -54,7 +52,13 @@ I used Wireshark 4.6.2 for the capture, but other versions may work as well. Ope
    chmod +x /path/to/sonoff-zbdongle-e-sniffer
    ```
 
-5. Restart Wireshark to load the new plug-in which should now appear under the 'Capture Interfaces' menu.
+5. The Python plug-in requires the `pyserial` package. Wireshark uses its own Python environment, so you need to install `pyserial` there. I found the version by using `sys.version` to log the version to a file. Once you know the version, and for me on MacOS it's `/usr/bin/python3`, you can install `pyserial` as follows:
+   
+   ```
+   /your/wireshark/python/path python3 -m pip install pyserial
+   ```
+
+6. Restart Wireshark to load the new plug-in which should now appear under the `Capture Interfaces` menu.
 
 Click on the settings icon to the left of the Sonoff sniffer interface to open the plug-in parameters window.
 
