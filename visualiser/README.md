@@ -2,6 +2,9 @@
 
 A real-time visualization tool for Zigbee mesh networks that captures and displays network topology, routing paths, and link quality metrics.
 
+![Zigbee Mesh Network Visualization](../docs/images/mesh-visualiser.jpg)
+
+
 ## Features
 
 - **Real-time visualization** of Zigbee mesh network topology
