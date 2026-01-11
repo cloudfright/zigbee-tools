@@ -397,7 +397,7 @@ def dump_frame(hex_string, lqi=0, rssi=0, visualizer=None):
                     logger.info(f"[{timestamp}] LQI:{lqi:3d} RSSI:{rssi:4d} {src_name} -> {dst_name} ")
                     
                     # Add to visualizer (skip broadcast addresses)
-                    if visualizer and nwk['nwk_dst'] not in ['0xffff', '0xfffc'] and nwk['nwk_src'] not in ['0xffff', '0xfffc']:
+                    if visualizer and nwk['nwk_dst'] not in ZIGBEE_BROADCAST_ADDRESSES:
                         visualizer.add_connection(src_name, dst_name, lqi, rssi)
 
 
