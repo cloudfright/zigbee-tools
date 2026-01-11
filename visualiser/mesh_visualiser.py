@@ -4,6 +4,7 @@ import sys
 import json
 import logging
 import os
+import argparse
 from datetime import datetime
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -54,11 +55,12 @@ logger = logging.getLogger(__name__)
 
 
 class MeshVisualizer:
-    def __init__(self, update_interval=UPDATE_INTERVAL):
+    def __init__(self, update_interval=UPDATE_INTERVAL, channel=SERIAL_CHANNEL):
         """Real-time mesh network visualizer"""
         self.G = nx.DiGraph()
         self.connections = defaultdict(lambda: {'count': 0, 'avg_lqi': 0, 'avg_rssi': 0})
         self.update_interval = update_interval
+        self.channel = channel
         self.last_update = time.time()
         self.lock = threading.Lock()
         
@@ -154,7 +156,7 @@ class MeshVisualizer:
             
             # Title with stats
             self.ax.set_title(
-                f'Zigbee Mesh Network - Live\n'
+                f'Zigbee Mesh Network - Live (Channel {self.channel})\n'
                 f'Nodes: {self.G.number_of_nodes()} | '
                 f'Connections: {self.G.number_of_edges()} | '
                 f'Messages: {sum(d["weight"] for _, _, d in self.G.edges(data=True))}',
@@ -403,17 +405,25 @@ def dump_frame(hex_string, lqi=0, rssi=0, visualizer=None):
 
 def main():
     """Main entry point for the mesh visualizer"""
+    parser = argparse.ArgumentParser(description='Zigbee Mesh Network Visualizer')
+    parser.add_argument('-p', '--port', default=SERIAL_PORT, help=f'Serial port (default: {SERIAL_PORT})')
+    parser.add_argument('-b', '--baud', type=int, default=SERIAL_BAUD, help=f'Baud rate (default: {SERIAL_BAUD})')
+    parser.add_argument('-c', '--channel', type=int, default=SERIAL_CHANNEL, help=f'Zigbee channel (default: {SERIAL_CHANNEL})')
+    parser.add_argument('-l', '--logfile', default=LOGFILE_PATH, help=f'Log file path (default: {LOGFILE_PATH})')
+    parser.add_argument('-u', '--update-interval', type=float, default=UPDATE_INTERVAL, help=f'Update interval in seconds (default: {UPDATE_INTERVAL})')
+    args = parser.parse_args()
+    
     try:
-        logging.basicConfig(filename=os.path.expanduser(LOGFILE_PATH), filemode="a", level=logging.INFO)
+        logging.basicConfig(filename=os.path.expanduser(args.logfile), filemode="a", level=logging.INFO)
 
-        ser = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=1)
+        ser = serial.Serial(args.port, args.baud, timeout=1)
 
-        channel = str(SERIAL_CHANNEL)
+        channel = str(args.channel)
         ser.write(bytes('{"C":', 'utf-8') + bytes(channel, 'utf-8') + bytes('}\r\n', 'utf-8'))
 
         # Initialize real-time visualizer
         print("Starting real-time mesh visualization...")
-        visualizer = MeshVisualizer(update_interval=UPDATE_INTERVAL)  # Update plot every 2 seconds
+        visualizer = MeshVisualizer(update_interval=args.update_interval, channel=args.channel)
 
     except Exception as e:
         print("Error opening serial port:", e)
